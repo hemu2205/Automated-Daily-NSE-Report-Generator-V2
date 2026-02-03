@@ -1,0 +1,5 @@
+streamlit
+selenium
+apscheduler
+pandas
+streamlit-option-menu

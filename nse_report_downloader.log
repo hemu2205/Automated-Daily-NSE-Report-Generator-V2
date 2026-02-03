@@ -1,0 +1,20 @@
+2026-02-03 09:40:06,882 - INFO - === STARTING NEW RUN ===
+2026-02-03 09:40:06,884 - INFO - Initializing browser driver...
+2026-02-03 09:40:08,104 - INFO - Navigating to NSE Reports page...
+2026-02-03 09:40:13,183 - INFO - Page loaded successfully.
+2026-02-03 09:40:13,183 - INFO - Selecting reports...
+2026-02-03 09:40:13,202 - WARNING - No report elements found in container.
+2026-02-03 09:40:13,202 - INFO - Reports selection status: False, Count: 0
+2026-02-03 09:40:13,203 - INFO - No reports selected to download.
+2026-02-03 09:40:13,203 - WARNING - No reports selected/found. Aborting protocol.
+2026-02-03 09:40:13,203 - INFO - Sending status email: Failed
+2026-02-03 09:40:13,216 - INFO - Attempting to send email to hemanthkanjivaram@gmail.com...
+2026-02-03 09:40:17,193 - INFO - Email sent successfully!
+2026-02-03 09:40:17,482 - INFO - Closing driver...
+2026-02-03 09:40:19,711 - INFO - === RUN COMPLETE ===
+2026-02-03 09:41:00,859 - INFO - Added job "Re-added Report Automation at 2025-01-24 19:37:00" to job store "default"
+2026-02-03 09:41:00,859 - INFO - Added job "Re-added Report Automation at 2025-01-24 19:38:00" to job store "default"
+2026-02-03 09:41:00,861 - INFO - Removed job 2025-01-24 19:37:00
+2026-02-03 09:41:00,862 - WARNING - Run time of job "Re-added Report Automation at 2025-01-24 19:37:00 (trigger: date[2025-01-24 19:37:00 IST], next run at: 2025-01-24 19:37:00 IST)" was missed by 374 days, 14:04:00.862357
+2026-02-03 09:41:00,863 - WARNING - Run time of job "Re-added Report Automation at 2025-01-24 19:38:00 (trigger: date[2025-01-24 19:38:00 IST], next run at: 2025-01-24 19:38:00 IST)" was missed by 374 days, 14:03:00.863358
+2026-02-03 09:41:00,868 - INFO - Removed job 2025-01-24 19:38:00

@@ -9,7 +9,7 @@ import logging
 # Function to get the receiver's email from the configuration file
 def get_receiver_add():
     try:
-        with open("C:\\NSE\\config.txt") as f:
+        with open("config.txt") as f:
             email = f.read().strip()  
             if email:
                 return email

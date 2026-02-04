@@ -19,7 +19,7 @@ logging.basicConfig(
     ]
 )
 
-download_directory = "C:\\NSE\\nsefiles"
+download_directory = os.path.join(os.getcwd(), "nsefiles")
 
 def init_driver():
     """Initialize and return a new Chrome driver instance."""

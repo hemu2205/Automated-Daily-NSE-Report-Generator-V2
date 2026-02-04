@@ -5,19 +5,19 @@ import os
 
 # Utility to check if the email configuration exists
 def twofa_exists():
-    return os.path.exists('C:\\NSE\\config.txt')
+    return os.path.exists('config.txt')
 
 # Function to retrieve the currently saved email
 def get_saved_email():
     if twofa_exists():
-        with open('C:\\NSE\\config.txt', 'r') as f:
+        with open('config.txt', 'r') as f:
             return f.read().strip()
 
 # Function to create the config file for storing email
 def add_gmail(gmail):
     try:
         if gmail:
-            with open('C:\\NSE\\config.txt', 'w') as f:
+            with open('config.txt', 'w') as f:
                 f.write(gmail)
             return "Email added successfully"
         else:
@@ -29,7 +29,7 @@ def add_gmail(gmail):
 def remove_gmail():
     try:
         if twofa_exists():
-            os.remove('C:\\NSE\\config.txt')
+            os.remove('config.txt')
             return "Email removed successfully"
         else:
             return "No email configuration to remove"

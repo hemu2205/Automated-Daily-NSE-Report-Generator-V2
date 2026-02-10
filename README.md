@@ -67,151 +67,69 @@ The application is built on a modular architecture:
 
 ## 🔄 Application Workflow
 
-The following describes the end-to-end workflow of the NSE Bot, from launch to report delivery.
+The following diagram illustrates the complete end-to-end workflow of the NSE Bot — from launch to report delivery.
 
-### Phase 1: Initialization & Configuration
+### High-Level Application Flow
 
-```
-User launches Streamlit Dashboard
-        │
-        ▼
-┌─────────────────────────────┐
-│  1. Load Streamlit UI       │
-│  2. Initialize session      │
-│  3. Read config.txt         │
-│  4. Check email setup       │
-└──────────┬──────────────────┘
-           │
-           ▼
-   ┌───────────────────┐          ┌──────────────────────┐
-   │ Email configured? │──(No)──► │ Email Setup Page      │
-   │                   │          │ → Validate email      │
-   └───────┬───────────┘          │ → Send OTP            │
-      (Yes)│                      │ → Verify & save to    │
-           │                      │   config.txt          │
-           ▼                      └──────────────────────┘
-   Dashboard Ready
-```
+```mermaid
+flowchart TD
+    A["🚀 User Launches\nStreamlit Dashboard"]:::init --> B["Load UI & Initialize\nSession State"]:::init
+    B --> C{"📧 Email\nConfigured?"}:::decision
 
-### Phase 2: Report Download (Manual or Scheduled)
+    C -- "No" --> D["📧 Email Setup Page\nValidate → Send OTP\n→ Verify & Save"]:::setup
+    D --> C
+    C -- "Yes" --> E["✅ Dashboard Ready"]:::success
 
-```
-Trigger: User clicks "START PROCESS" or Scheduler fires
-        │
-        ▼
-┌──────────────────────────────────────────────┐
-│  Step 1: Initialize Chrome WebDriver         │
-│  → Configure headless options                │
-│  → Set download directory (C:\NSE\nsefiles)  │
-│  → Disable automation detection flags        │
-└──────────────────┬───────────────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Step 2: Navigate to NSE Reports Page        │
-│  → URL: https://www.nseindia.com/all-reports │
-│  → Wait for page element "cr_equity_daily"   │
-│  → Retry up to 3 times with backoff          │
-└──────────────────┬───────────────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Step 3: Select Reports                      │
-│  → Locate all ".reportsDownload" elements    │
-│  → Scroll to each checkbox & click           │
-│  → Collect report names for verification     │
-└──────────────────┬───────────────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Step 4: Download Reports                    │
-│  → Click "MultiDwnld" button                │
-│  → Browser downloads ZIP archive             │
-└──────────────────┬───────────────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Step 5: Wait & Extract                      │
-│  → Poll download directory for .zip file     │
-│  → Timeout: 120 seconds                      │
-│  → Extract ZIP to date-stamped folder        │
-│    (e.g., nsefiles/100226/)                  │
-│  → Delete original ZIP file                  │
-└──────────────────┬───────────────────────────┘
+    E --> F{"⚡ Trigger\nSource?"}:::decision
+    F -- "Manual\nSTART PROCESS" --> G["🔧 Initialize Chrome\nWebDriver (Headless)"]:::download
+    F -- "Scheduled\nAPScheduler fires" --> G
+
+    G --> H["🌐 Navigate to\nNSE Reports Page"]:::download
+    H --> I{"Page\nLoaded?"}:::decision
+    I -- "No (retry ≤ 3)" --> H
+    I -- "Failed" --> ERR["❌ Log Error &\nSend Failure Email"]:::error
+    I -- "Yes" --> J["☑️ Select Reports\nLocate & Click Checkboxes"]:::download
+
+    J --> K["📥 Download Reports\nClick MultiDwnld → ZIP"]:::download
+    K --> L{"ZIP File\nReceived?"}:::decision
+    L -- "Timeout 120s" --> ERR
+    L -- "Yes" --> M["📦 Extract ZIP to\nDate-Stamped Folder"]:::download
+
+    M --> N["🔍 Duplicate Detection\nAuto-Rename with Suffix"]:::process
+    N --> O["📁 File Segregation\nSort by Extension"]:::process
+    O --> P["✔️ CSV Validation\nPandas DataFrame Checks"]:::process
+
+    P --> Q["📤 Email Notification\nSend Status + Log\nvia Gmail SMTP/TLS"]:::notify
+    Q --> R["🧹 Cleanup\nClose Driver & Update Status"]:::notify
+    R --> S["✅ Run Complete"]:::success
+
+    classDef init fill:#7c3aed,stroke:#5b21b6,color:#fff,font-weight:bold
+    classDef setup fill:#0891b2,stroke:#0e7490,color:#fff,font-weight:bold
+    classDef decision fill:#f59e0b,stroke:#d97706,color:#000,font-weight:bold
+    classDef download fill:#1d4ed8,stroke:#1e40af,color:#fff,font-weight:bold
+    classDef process fill:#047857,stroke:#065f46,color:#fff,font-weight:bold
+    classDef notify fill:#7c3aed,stroke:#5b21b6,color:#fff,font-weight:bold
+    classDef success fill:#16a34a,stroke:#15803d,color:#fff,font-weight:bold
+    classDef error fill:#dc2626,stroke:#b91c1c,color:#fff,font-weight:bold
 ```
 
-### Phase 3: Post-Processing Pipeline
+### Scheduling Workflow
 
-```
-                   │
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Step 6: Duplicate Detection                 │
-│  → Scan extracted folder for duplicate names │
-│  → Auto-rename duplicates with suffix [1]    │
-│  → Log all renames                           │
-└──────────────────┬───────────────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Step 7: File Segregation                    │
-│  → Sort files by extension into subfolders   │
-│  → e.g., /csv/, /dat/, /xlsx/                │
-└──────────────────┬───────────────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Step 8: CSV Validation                      │
-│  → Check file exists & has .csv extension    │
-│  → Load into Pandas DataFrame                │
-│  → Validate column names (no NaN, strings)   │
-│  → Validate data types (no mixed types)      │
-│  → Detect anomalies (missing values, nulls)  │
-└──────────────────┬───────────────────────────┘
-```
+```mermaid
+flowchart LR
+    A["📅 User Opens\nSchedule Tab"]:::sched --> B["Select Date\n& Time"]:::sched
+    B --> C["Click\nAdd to Queue"]:::sched
+    C --> D["APScheduler Creates\nDateTrigger Job"]:::sched
+    D --> E["Save to\nschedulers.txt"]:::sched
+    E --> F{"⏰ Scheduled\nTime Reached?"}:::decision
+    F -- "Yes" --> G["🔁 Trigger\nDownload Pipeline"]:::trigger
+    G --> H["Remove from\nschedulers.txt"]:::trigger
+    H --> I["✅ Status:\nCompleted"]:::success
 
-### Phase 4: Notification & Cleanup
-
-```
-                   │
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Step 9: Email Notification                  │
-│  → Compose status email (success/failure)    │
-│  → Include download count & validation stats │
-│  → Attach execution log file                 │
-│  → Send via Gmail SMTP (TLS on port 587)     │
-└──────────────────┬───────────────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Step 10: Cleanup                            │
-│  → Close Selenium WebDriver                  │
-│  → Log final run status                      │
-│  → Update scheduler status (if scheduled)    │
-└──────────────────────────────────────────────┘
-```
-
-### Scheduling Workflow (Optional)
-
-```
-User navigates to Schedule Tab
-        │
-        ▼
-┌──────────────────────────────────────────────┐
-│  1. Select Date and Time                     │
-│  2. Click "Add to Queue"                     │
-│  3. APScheduler creates a DateTrigger job    │
-│  4. Schedule saved to schedulers.txt         │
-│  5. Job status tracked in memory dictionary  │
-└──────────────────┬───────────────────────────┘
-                   │
-                   ▼
-   At scheduled time → Trigger Phase 2
-                   │
-                   ▼
-   On completion → Remove from schedulers.txt
-                   → Update status to "Completed"
+    classDef sched fill:#1d4ed8,stroke:#1e40af,color:#fff,font-weight:bold
+    classDef decision fill:#f59e0b,stroke:#d97706,color:#000,font-weight:bold
+    classDef trigger fill:#7c3aed,stroke:#5b21b6,color:#fff,font-weight:bold
+    classDef success fill:#16a34a,stroke:#15803d,color:#fff,font-weight:bold
 ```
 
 ### Error Handling & Recovery

@@ -18,6 +18,7 @@ The **Automated Daily NSE Report Generator** is a robust robotic process automat
 - [Key Features](#-key-features)
 - [System Architecture](#-system-architecture)
 - [Technology Stack](#-technology-stack)
+- [Application Workflow](#-application-workflow)
 - [Installation & Setup](#-installation--setup)
 - [Configuration](#-configuration)
 - [Usage Guide](#-usage-guide)
@@ -35,6 +36,8 @@ The **Automated Daily NSE Report Generator** is a robust robotic process automat
 *   **Cron-based Scheduling**: Built-in `APScheduler` integration allows for precise, automated daily execution at user-defined intervals.
 *   **Real-time Monitoring Dashboard**: A comprehensive "Deep Fintech Dark" themed UI provides live execution logs, system status, and manual control overrides.
 *   **Data Integrity Checks**: Validates downloaded files to ensure completeness before distribution.
+*   **Duplicate Detection**: Automatically detects and resolves duplicate file names in downloaded reports.
+*   **File Segregation**: Organizes downloaded reports by file type (CSV, DAT, etc.) into dedicated subfolders.
 
 ---
 
@@ -62,7 +65,170 @@ The application is built on a modular architecture:
 
 ---
 
-## � Installation & Setup
+## 🔄 Application Workflow
+
+The following describes the end-to-end workflow of the NSE Bot, from launch to report delivery.
+
+### Phase 1: Initialization & Configuration
+
+```
+User launches Streamlit Dashboard
+        │
+        ▼
+┌─────────────────────────────┐
+│  1. Load Streamlit UI       │
+│  2. Initialize session      │
+│  3. Read config.txt         │
+│  4. Check email setup       │
+└──────────┬──────────────────┘
+           │
+           ▼
+   ┌───────────────────┐          ┌──────────────────────┐
+   │ Email configured? │──(No)──► │ Email Setup Page      │
+   │                   │          │ → Validate email      │
+   └───────┬───────────┘          │ → Send OTP            │
+      (Yes)│                      │ → Verify & save to    │
+           │                      │   config.txt          │
+           ▼                      └──────────────────────┘
+   Dashboard Ready
+```
+
+### Phase 2: Report Download (Manual or Scheduled)
+
+```
+Trigger: User clicks "START PROCESS" or Scheduler fires
+        │
+        ▼
+┌──────────────────────────────────────────────┐
+│  Step 1: Initialize Chrome WebDriver         │
+│  → Configure headless options                │
+│  → Set download directory (C:\NSE\nsefiles)  │
+│  → Disable automation detection flags        │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────────────┐
+│  Step 2: Navigate to NSE Reports Page        │
+│  → URL: https://www.nseindia.com/all-reports │
+│  → Wait for page element "cr_equity_daily"   │
+│  → Retry up to 3 times with backoff          │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────────────┐
+│  Step 3: Select Reports                      │
+│  → Locate all ".reportsDownload" elements    │
+│  → Scroll to each checkbox & click           │
+│  → Collect report names for verification     │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────────────┐
+│  Step 4: Download Reports                    │
+│  → Click "MultiDwnld" button                │
+│  → Browser downloads ZIP archive             │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────────────┐
+│  Step 5: Wait & Extract                      │
+│  → Poll download directory for .zip file     │
+│  → Timeout: 120 seconds                      │
+│  → Extract ZIP to date-stamped folder        │
+│    (e.g., nsefiles/100226/)                  │
+│  → Delete original ZIP file                  │
+└──────────────────┬───────────────────────────┘
+```
+
+### Phase 3: Post-Processing Pipeline
+
+```
+                   │
+                   ▼
+┌──────────────────────────────────────────────┐
+│  Step 6: Duplicate Detection                 │
+│  → Scan extracted folder for duplicate names │
+│  → Auto-rename duplicates with suffix [1]    │
+│  → Log all renames                           │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────────────┐
+│  Step 7: File Segregation                    │
+│  → Sort files by extension into subfolders   │
+│  → e.g., /csv/, /dat/, /xlsx/                │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────────────┐
+│  Step 8: CSV Validation                      │
+│  → Check file exists & has .csv extension    │
+│  → Load into Pandas DataFrame                │
+│  → Validate column names (no NaN, strings)   │
+│  → Validate data types (no mixed types)      │
+│  → Detect anomalies (missing values, nulls)  │
+└──────────────────┬───────────────────────────┘
+```
+
+### Phase 4: Notification & Cleanup
+
+```
+                   │
+                   ▼
+┌──────────────────────────────────────────────┐
+│  Step 9: Email Notification                  │
+│  → Compose status email (success/failure)    │
+│  → Include download count & validation stats │
+│  → Attach execution log file                 │
+│  → Send via Gmail SMTP (TLS on port 587)     │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────────────┐
+│  Step 10: Cleanup                            │
+│  → Close Selenium WebDriver                  │
+│  → Log final run status                      │
+│  → Update scheduler status (if scheduled)    │
+└──────────────────────────────────────────────┘
+```
+
+### Scheduling Workflow (Optional)
+
+```
+User navigates to Schedule Tab
+        │
+        ▼
+┌──────────────────────────────────────────────┐
+│  1. Select Date and Time                     │
+│  2. Click "Add to Queue"                     │
+│  3. APScheduler creates a DateTrigger job    │
+│  4. Schedule saved to schedulers.txt         │
+│  5. Job status tracked in memory dictionary  │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ▼
+   At scheduled time → Trigger Phase 2
+                   │
+                   ▼
+   On completion → Remove from schedulers.txt
+                   → Update status to "Completed"
+```
+
+### Error Handling & Recovery
+
+| Scenario | Handling Strategy |
+|:---|:---|
+| NSE page fails to load | Retry up to 3 times with exponential backoff |
+| No reports found | Log warning, abort gracefully, send failure email |
+| Download timeout | Log error after 120s, abort, notify via email |
+| Duplicate file names | Auto-rename with `[1]` suffix |
+| CSV validation fails | Log warning for each failed file, continue processing |
+| Email send failure | Log error, do not crash the application |
+| Driver initialization fails | Raise critical error, halt execution |
+
+---
+
+## ⚙ Installation & Setup
 
 ### Prerequisites
 - Windows 10/11, macOS, or Linux.
@@ -129,16 +295,27 @@ To set up daily runs:
 ## 📂 Project Structure
 
 ```text
-nse-report-generator/
-├── Streamlit.py            # Main application entry point & UI
-├── main.py                 # Core workflow orchestrator
-├── Data_retrieval.py       # Selenium automation logic
-├── notification.py         # Email notification service
-├── mail_setup.py           # Email configuration & OTP utilities
-├── Scheduling.py           # Job scheduler management
-├── requirements.txt        # Project dependencies
-└── README.md               # Project documentation
+NSE V2/
+├── Streamlit.py            # Main application entry point & dashboard UI
+├── main.py                 # Core workflow orchestrator (pipeline controller)
+├── NSE_MAIN.py             # Standalone monolithic automation script (legacy)
+├── Data_retrieval.py       # Selenium automation logic for NSE portal
+├── notification.py         # Email notification service with log attachment
+├── mail_setup.py           # Email configuration, OTP generation & verification
+├── Scheduling.py           # APScheduler job management & persistence
+├── csv_validation.py       # Pandas-based CSV integrity validation engine
+├── duplicates_handler.py   # Duplicate file name detection & resolution
+├── segregation.py          # File organizer by extension type
+├── config.txt              # Stores configured receiver email address
+├── schedulers.txt          # Persisted scheduled job timestamps
+├── requirements.txt        # Python package dependencies
+├── nse_report_downloader.log # Runtime execution log
+├── nsefiles/               # Downloaded NSE report files (auto-created)
+├── Reports/                # Archived/processed report outputs
+└── README.md               # This documentation file
+```
 
+---
 
 ## 🔮 Future Enhancements
 
@@ -146,10 +323,11 @@ nse-report-generator/
 - [ ] **Database Integration**: Store historical data in PostgreSQL/MySQL for trend analysis.
 - [ ] **Data Visualization**: Add charts to the dashboard to visualize market trends from downloaded reports.
 - [ ] **API Support**: Expose a REST API for triggering downloads externally.
+- [ ] **Multi-Exchange Support**: Extend to BSE and MCX markets.
+- [ ] **Headless Mode Toggle**: Allow users to switch between headless and visual browser mode from the dashboard.
 
-
+---
 
 ## 📜 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-

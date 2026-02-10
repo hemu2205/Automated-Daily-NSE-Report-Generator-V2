@@ -1,0 +1,1012 @@
+================================================================================
+           AUTOMATED DAILY NSE REPORT GENERATOR (NSE BOT) - VERSION 2
+                        PROJECT DOCUMENTATION
+================================================================================
+
+Document Version : 1.0
+Date             : 2026-02-10
+Project Name     : Automated Daily NSE Report Generator (NSE Bot V2)
+Language         : Python 3.10+
+Primary Framework: Streamlit (Frontend), Selenium (Automation)
+
+================================================================================
+                          TABLE OF CONTENTS
+================================================================================
+
+  1.  INTRODUCTION
+  2.  PROBLEM STATEMENT
+  3.  SOLUTION OVERVIEW
+  4.  SYSTEM ARCHITECTURE
+  5.  TECHNOLOGY STACK
+  6.  MODULE-WISE DOCUMENTATION
+      6.1  Streamlit.py (Dashboard & Frontend)
+      6.2  main.py (Workflow Orchestrator)
+      6.3  Data_retrieval.py (Selenium Automation Engine)
+      6.4  notification.py (Email Notification Service)
+      6.5  mail_setup.py (Email Configuration & OTP)
+      6.6  Scheduling.py (Job Scheduler)
+      6.7  csv_validation.py (Data Validation Engine)
+      6.8  duplicates_handler.py (Duplicate File Manager)
+      6.9  segregation.py (File Organizer)
+      6.10 NSE_MAIN.py (Legacy Standalone Script)
+  7.  CONFIGURATION FILES
+  8.  APPLICATION WORKFLOW
+  9.  ERROR HANDLING STRATEGY
+  10. DIRECTORY STRUCTURE
+  11. DEPENDENCIES
+  12. INSTALLATION GUIDE
+  13. USAGE INSTRUCTIONS
+  14. SECURITY CONSIDERATIONS
+  15. KNOWN LIMITATIONS
+  16. FUTURE ENHANCEMENTS
+  17. CONCLUSION
+
+================================================================================
+ 1. INTRODUCTION
+================================================================================
+
+The Automated Daily NSE Report Generator (NSE Bot) is a Robotic Process
+Automation (RPA) tool developed in Python. It automates the daily retrieval
+of equity and financial reports from the National Stock Exchange (NSE) of
+India's official website (https://www.nseindia.com).
+
+The tool navigates the NSE portal using Selenium WebDriver, selects the
+required daily reports (CM-Bhavcopy, F&O data, etc.), downloads them as a
+ZIP archive, extracts and validates the files, and sends a summary email
+with execution logs to the configured recipients.
+
+A Streamlit-based web dashboard provides a user-friendly interface for
+configuration, manual triggering, scheduling, and monitoring.
+
+================================================================================
+ 2. PROBLEM STATEMENT
+================================================================================
+
+Financial analysts, portfolio managers, and data teams at brokerages require
+daily NSE reports for market analysis, compliance, and research. The manual
+process of:
+
+  - Navigating the NSE website daily
+  - Selecting the correct reports from a dynamic interface
+  - Downloading, extracting, and organizing files
+  - Validating data integrity
+  - Distributing reports to stakeholders via email
+
+...is time-consuming, error-prone, and susceptible to human oversight,
+especially when the NSE portal has dynamic elements, anti-bot measures, and
+variable loading times.
+
+================================================================================
+ 3. SOLUTION OVERVIEW
+================================================================================
+
+NSE Bot V2 solves this problem by:
+
+  (a) AUTOMATING THE ENTIRE PIPELINE:
+      Selenium WebDriver navigates the NSE portal, selects reports, triggers
+      the download, waits for completion, and extracts the ZIP archive — all
+      without human intervention.
+
+  (b) VALIDATING DATA INTEGRITY:
+      Downloaded CSV files are loaded into Pandas DataFrames and checked for
+      column validity, data type consistency, and missing values.
+
+  (c) HANDLING EDGE CASES:
+      Duplicate file names are detected and auto-resolved. Files are sorted
+      by type. Network failures trigger retries with exponential backoff.
+
+  (d) NOTIFYING STAKEHOLDERS:
+      A summary email (success/failure, download stats, log attachment) is
+      sent via Gmail SMTP with TLS encryption.
+
+  (e) ENABLING SCHEDULING:
+      The APScheduler library enables users to schedule automated runs at
+      specific dates and times through the dashboard.
+
+  (f) PROVIDING A MONITORING DASHBOARD:
+      A Streamlit web UI with a "Deep Fintech Dark" theme allows real-time
+      log viewing, manual control, email setup, and schedule management.
+
+================================================================================
+ 4. SYSTEM ARCHITECTURE
+================================================================================
+
+The system follows a modular, layered architecture:
+
+  +------------------------------------------------------------------+
+  |                     STREAMLIT FRONTEND                            |
+  |  (Streamlit.py)                                                  |
+  |  - Dashboard UI with sidebar navigation                          |
+  |  - Email Setup page                                              |
+  |  - NSE Downloader page (manual trigger)                          |
+  |  - Schedule management page                                      |
+  |  - System Logs viewer                                            |
+  +------------------------------------------------------------------+
+            |                    |                    |
+            v                    v                    v
+  +------------------+  +------------------+  +------------------+
+  | ORCHESTRATION    |  | SCHEDULING       |  | EMAIL CONFIG     |
+  | (main.py)        |  | (Scheduling.py)  |  | (mail_setup.py)  |
+  | - Pipeline ctrl  |  | - APScheduler    |  | - OTP generation |
+  | - Error handling |  | - Job persistence|  | - Email validation|
+  | - Logging        |  | - Status tracking|  | - Config storage |
+  +--------+---------+  +------------------+  +------------------+
+           |
+           v
+  +------------------------------------------------------------------+
+  |                    AUTOMATION ENGINE                              |
+  |  (Data_retrieval.py)                                             |
+  |  - Chrome WebDriver initialization                               |
+  |  - NSE page navigation with retry logic                          |
+  |  - Report selection via JavaScript click                         |
+  |  - Multi-download trigger                                        |
+  |  - ZIP download polling and extraction                           |
+  +------------------------------------------------------------------+
+           |
+           v
+  +------------------------------------------------------------------+
+  |                 POST-PROCESSING LAYER                             |
+  +------------------+------------------+----------------------------+
+  | duplicates_      | segregation.py   | csv_validation.py          |
+  | handler.py       | - Sort by file   | - FilePath class           |
+  | - Detect dupes   |   extension      | - Column validation        |
+  | - Auto-rename    | - Create typed   | - Data type checks         |
+  |                  |   subfolders     | - Anomaly detection        |
+  +------------------+------------------+----------------------------+
+           |
+           v
+  +------------------------------------------------------------------+
+  |                   NOTIFICATION SERVICE                            |
+  |  (notification.py)                                               |
+  |  - MIME message composition                                      |
+  |  - Log file attachment                                           |
+  |  - Gmail SMTP with TLS (port 587)                                |
+  +------------------------------------------------------------------+
+
+================================================================================
+ 5. TECHNOLOGY STACK
+================================================================================
+
+  Component         Technology        Version     Purpose
+  --------          ----------        -------     -------
+  Language          Python            3.10+       Core application logic
+  Frontend          Streamlit         1.28+       Web dashboard and UI
+  Automation        Selenium          4.10+       Browser automation
+  Scheduling        APScheduler       3.10+       Background job scheduling
+  Data Processing   Pandas            2.0+        CSV validation & analysis
+  UI Enhancement    streamlit-        0.3+        Sidebar navigation menu
+                    option-menu
+  Email             smtplib           Built-in    SMTP email dispatch
+  Browser           Google Chrome     Latest      Target browser for Selenium
+
+================================================================================
+ 6. MODULE-WISE DOCUMENTATION
+================================================================================
+
+--------------------------------------------------------------------------------
+ 6.1  Streamlit.py — Dashboard & Frontend
+--------------------------------------------------------------------------------
+
+  FILE     : Streamlit.py
+  LINES    : ~598
+  PURPOSE  : Main entry point for the application. Provides the web-based
+             dashboard with a premium "Deep Fintech Dark" themed UI.
+
+  KEY COMPONENTS:
+
+    COLORS Dictionary:
+      Defines the color palette used throughout the application:
+        - bg_main   : #0F172A (Dark Slate Blue)
+        - bg_card   : rgba(30, 41, 59, 0.7) (Semi-transparent dark)
+        - primary   : #6366F1 (Electric Violet)
+        - success   : #06C270 (Emerald Green)
+        - text_main : #E2E8F0 (Near White)
+        - text_sub  : #94A3B8 (Slate 400)
+
+    Custom CSS:
+      Injects comprehensive CSS for:
+        - Google Fonts (Inter family: 300-700 weights)
+        - Input field styling with high visibility
+        - Button styles with hover/active states
+        - Glassmorphism card effects
+        - Responsive layout adjustments
+
+    Helper Functions:
+      - glass_card(content)  : Renders a glassmorphic card container
+      - render_header()      : Displays the main page header
+
+    Session State Variables:
+      - email_setup : Boolean flag for email configuration status
+      - otp         : Stored OTP for 2FA verification
+      - email       : Current user email string
+
+    Pages (via sidebar option_menu):
+      1. Email Setup    — Configure recipient email with OTP verification
+      2. NSE Downloader — Manual report download trigger
+      3. Schedule       — Date/time scheduling for automated runs
+      4. System Logs    — Real-time log file viewer
+
+  LAUNCH COMMAND:
+    streamlit run Streamlit.py
+
+--------------------------------------------------------------------------------
+ 6.2  main.py — Workflow Orchestrator
+--------------------------------------------------------------------------------
+
+  FILE     : main.py
+  LINES    : 105
+  PURPOSE  : Central pipeline controller that coordinates the entire
+             download → process → validate → notify workflow.
+
+  IMPORTS  :
+    - Data_retrieval (as d)  : Selenium automation functions
+    - duplicates_handler (as dh) : Duplicate file manager
+    - csv_validation         : FilePath class and run_validations()
+    - segregation            : File sorting by extension
+    - notification           : Email send function
+
+  CONFIGURATION:
+    - download_directory = "C:\NSE\nsefiles"
+    - Logging to both file (nse_report_downloader.log) and console
+
+  FUNCTION: main()
+
+    STEP-BY-STEP EXECUTION:
+
+      1. Initialize Selenium Chrome WebDriver
+         → Calls d.init_driver()
+
+      2. Navigate to NSE Reports page
+         → Calls d.load_nse_reports_page(driver)
+
+      3. Select available reports
+         → Calls d.select_reports(driver)
+         → Returns: flag (bool), report_names (list)
+
+      4. Trigger multi-download
+         → Calls d.download_reports(driver, flag)
+
+      5. Wait for download completion
+         → Calls d.wait_for_downloads(report_names, download_directory, 120)
+         → Polls for ZIP file, extracts to dated subfolder
+
+      6. Handle duplicate file names
+         → Calls dh.handle_redundant_files(today_folder)
+
+      7. Segregate files by extension
+         → Calls segregate(today_folder)
+         → Creates subfolders: csv/, dat/, xlsx/, etc.
+
+      8. Validate CSV files
+         → For each CSV file in the segregated csv folder:
+            - Creates FilePath object
+            - Runs run_validations() (exists, loads, columns, types, anomalies)
+
+      9. Send notification email
+         → ALWAYS executes (in finally block)
+         → Calls s(status, num_downloaded, num_downloaded, 0)
+
+      10. Close WebDriver
+          → driver.quit() in finally block
+
+    ERROR HANDLING:
+      - try/except/finally ensures email is always sent
+      - Critical errors logged with full traceback (exc_info=True)
+      - Driver is always closed even on failure
+
+--------------------------------------------------------------------------------
+ 6.3  Data_retrieval.py — Selenium Automation Engine
+--------------------------------------------------------------------------------
+
+  FILE     : Data_retrieval.py
+  LINES    : 211
+  PURPOSE  : Contains all Selenium WebDriver logic for interacting with
+             the NSE website.
+
+  GLOBAL CONFIGURATION:
+    - download_directory = os.path.join(os.getcwd(), "nsefiles")
+    - Logging to file and console
+
+  FUNCTIONS:
+
+    init_driver()
+      PURPOSE : Create and configure a Chrome WebDriver instance.
+      DETAILS :
+        - Sets --start-maximized for full window
+        - Adds Mozilla/5.0 user agent
+        - Disables AutomationControlled flag (anti-bot bypass)
+        - Excludes 'enable-automation' switch
+        - Configures download directory preferences
+        - Disables download prompts
+      RETURNS : WebDriver instance
+      RAISES  : Exception if Chrome or ChromeDriver not available
+
+    retry_operation(func, driver, retries=3, base_delay=5)
+      PURPOSE : Execute a function with retry logic and exponential backoff.
+      DETAILS :
+        - Attempts the function up to 'retries' times
+        - On failure, waits random(base_delay, base_delay+2) seconds
+        - On final failure, quits driver and re-raises exception
+      RETURNS : Return value of func()
+
+    load_nse_reports_page(driver)
+      PURPOSE : Navigate to the NSE all-reports page and wait for it to load.
+      DETAILS :
+        - URL: https://www.nseindia.com/all-reports
+        - Waits for element with ID "cr_equity_daily_Current"
+        - Uses retry_operation for both navigation and element wait
+        - WebDriverWait timeout: 30 seconds
+
+    select_reports(driver)
+      PURPOSE : Find and select all available daily equity reports.
+      DETAILS :
+        - Locates container element "cr_equity_daily_Current"
+        - Finds all ".reportsDownload" elements within it
+        - For each report:
+          * Extracts report name from ".reportCardSegment" text
+          * Scrolls checkbox into view
+          * Clicks checkbox via JavaScript
+      RETURNS : (flag: bool, report_names: list)
+        - flag = True if at least one report was selected
+        - report_names = list of selected report name strings
+
+    download_reports(driver, flag)
+      PURPOSE : Click the multi-download button if reports are selected.
+      DETAILS :
+        - Waits for element with ID "MultiDwnld" to be clickable
+        - Scrolls to it and clicks via JavaScript
+        - 1-second pause before click for stability
+
+    wait_for_downloads(filenames, download_dir, timeout=60)
+      PURPOSE : Poll for ZIP file download and extract its contents.
+      DETAILS :
+        - Creates download_dir if it doesn't exist
+        - Polls every 1 second for .zip files (ignores .crdownload)
+        - Selects the most recent ZIP by creation time
+        - Verifies file size > 0 before proceeding
+        - Extracts to date-stamped subfolder (e.g., "100226")
+        - Cleans existing folder if it exists (shutil.rmtree)
+        - Verifies all expected filenames are in the ZIP
+        - Deletes the ZIP file after extraction
+      RETURNS : True on success, False on timeout or error
+
+--------------------------------------------------------------------------------
+ 6.4  notification.py — Email Notification Service
+--------------------------------------------------------------------------------
+
+  FILE     : notification.py
+  LINES    : 86
+  PURPOSE  : Sends status emails with execution logs after each run.
+
+  CONFIGURATION:
+    - Sender email : nsebot22@gmail.com
+    - SMTP Server  : smtp.gmail.com
+    - Port         : 587 (TLS)
+    - Log file     : nse_report_downloader.log
+
+  FUNCTIONS:
+
+    get_receiver_add()
+      PURPOSE : Read the receiver email address from config.txt.
+      RETURNS : Email string or None if file not found.
+
+    send_mail(status, num_downloaded, num_validated, num_renamed)
+      PURPOSE : Compose and send the status notification email.
+      DETAILS :
+        - Creates MIMEMultipart message
+        - Body includes: overall status, files downloaded/validated/renamed
+        - Attaches the log file as a base64-encoded attachment
+        - Subject: "NSE BOT REPORT RETRIEVAL AUTOMATION RUN DETAILS"
+        - Uses TLS encryption via starttls()
+
+--------------------------------------------------------------------------------
+ 6.5  mail_setup.py — Email Configuration & OTP
+--------------------------------------------------------------------------------
+
+  FILE     : mail_setup.py
+  LINES    : 88
+  PURPOSE  : Handles email setup with OTP-based two-factor verification
+             through the Streamlit dashboard.
+
+  FUNCTIONS:
+
+    twofa_exists()
+      PURPOSE : Check if config.txt exists (email is configured).
+      RETURNS : Boolean
+
+    get_saved_email()
+      PURPOSE : Read the saved email from config.txt.
+      RETURNS : Email string or None
+
+    add_gmail(gmail)
+      PURPOSE : Write the email address to config.txt.
+      RETURNS : Success/error message string
+
+    remove_gmail()
+      PURPOSE : Delete config.txt to remove the saved email.
+      RETURNS : Success/error message string
+
+    validate_email(gmail)
+      PURPOSE : Validate email format using regex.
+      PATTERN : r'^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
+      RETURNS : Boolean
+
+    otp_gen()
+      PURPOSE : Generate a random 4-digit OTP.
+      RETURNS : Integer between 1000 and 9999
+
+    send_email(gmail, otp)
+      PURPOSE : Send the OTP to the user's email for verification.
+      DETAILS :
+        - Uses the bot's Gmail account (nsebot22@gmail.com)
+        - TLS encryption via starttls()
+      RETURNS : True on success, error message string on failure
+
+    verify_otp(user_input_otp, expected_otp)
+      PURPOSE : Compare user-entered OTP with the generated one.
+      RETURNS : Boolean
+
+    initiate_email_setup(email, user_input_otp=None)
+      PURPOSE : Full setup flow — validate → send OTP → verify → save.
+      RETURNS : Status message string
+
+--------------------------------------------------------------------------------
+ 6.6  Scheduling.py — Job Scheduler
+--------------------------------------------------------------------------------
+
+  FILE     : Scheduling.py
+  LINES    : 113
+  PURPOSE  : Manages scheduled automation jobs using APScheduler with
+             file-based persistence.
+
+  CONFIGURATION:
+    - SCHEDULES_FILE = "C:\NSE\schedulers.txt"
+    - Uses BackgroundScheduler (runs in daemon thread)
+    - DateTrigger for one-time scheduled execution
+
+  GLOBAL OBJECTS:
+    - scheduler   : BackgroundScheduler instance (auto-started)
+    - job_status  : Dictionary tracking each job's status:
+                    "Scheduled" → "In Progress" → "Completed"
+
+  FUNCTIONS:
+
+    load_schedules()
+      PURPOSE : Read all saved scheduled times from schedulers.txt.
+      RETURNS : List of datetime strings
+
+    save_schedule(scheduled_time)
+      PURPOSE : Append a new schedule timestamp to schedulers.txt.
+
+    remove_schedule(scheduled_time)
+      PURPOSE : Remove a completed schedule from schedulers.txt.
+
+    run_automation_task(scheduled_time)
+      PURPOSE : Callback executed when a scheduled job fires.
+      DETAILS :
+        - Updates job_status to "In Progress"
+        - Calls main() from main.py (full pipeline)
+        - Updates job_status to "Completed"
+        - Removes schedule from persistence file
+
+    add_new_schedule(scheduled_datetime)
+      PURPOSE : Register a new job with APScheduler.
+      DETAILS :
+        - Saves to schedulers.txt
+        - Creates DateTrigger job
+        - Sets initial status to "Scheduled"
+
+    load_existing_schedules()
+      PURPOSE : On app startup, re-register all persisted schedules.
+      DETAILS :
+        - Reads from schedulers.txt
+        - Parses datetime strings ('%Y-%m-%d %H:%M:%S')
+        - Re-adds to APScheduler with DateTrigger
+
+    start_scheduler()
+      PURPOSE : Initialize the scheduler and load existing schedules.
+
+    get_job_status()
+      PURPOSE : Return the current status dictionary of all jobs.
+      RETURNS : dict {scheduled_time_str: status_str}
+
+--------------------------------------------------------------------------------
+ 6.7  csv_validation.py — Data Validation Engine
+--------------------------------------------------------------------------------
+
+  FILE     : csv_validation.py
+  LINES    : 138
+  PURPOSE  : Validates downloaded CSV files for data integrity using Pandas.
+
+  CLASS: FilePath
+
+    Constructor: __init__(self, file_path)
+      - Stores the file path
+      - Initializes dataframe as None
+
+    Methods:
+
+      file_exists(self)
+        - Checks os.path.exists()
+        - Validates .csv extension
+        - Returns: Boolean
+
+      load_csv(self)
+        - Loads file using pd.read_csv()
+        - Handles: FileNotFoundError, EmptyDataError, ParserError
+        - Returns: Boolean
+
+      validate_columns(self)
+        - Checks for NaN column names
+        - Ensures all column names are strings
+        - Returns: Boolean
+
+      validate_data_types(self)
+        - Uses pd.api.types.infer_dtype() for each column
+        - Flags columns with 'mixed' data types as invalid
+        - Returns: Boolean
+
+      validate_no_anomalies(self)
+        - Checks for null/missing values using isnull()
+        - Logs count of missing values per column
+        - Returns: Boolean
+
+  FUNCTION: run_validations(file_path_obj)
+    PURPOSE : Execute all validation checks in sequence.
+    ORDER   :
+      1. file_exists()
+      2. load_csv()
+      3. validate_columns()
+      4. validate_data_types()
+      5. validate_no_anomalies()
+    RETURNS : True only if all checks pass. Stops at first failure.
+
+--------------------------------------------------------------------------------
+ 6.8  duplicates_handler.py — Duplicate File Manager
+--------------------------------------------------------------------------------
+
+  FILE     : duplicates_handler.py
+  LINES    : 92
+  PURPOSE  : Detects and resolves duplicate filenames in the download folder.
+
+  FUNCTIONS:
+
+    resolve_duplicate_name(existing_names, duplicate_name)
+      PURPOSE : Generate a unique name for a duplicate file.
+      DETAILS :
+        - Prompts user up to 3 times (for CLI usage)
+        - Falls back to auto-naming with [1] suffix
+        - Ensures uniqueness by checking against existing_names set
+      RETURNS : New unique filename string
+
+    handle_redundant_files(directory)
+      PURPOSE : Scan a directory and rename any duplicate files.
+      DETAILS :
+        - Lists all files in the directory
+        - Tracks unique names using a set
+        - On duplicate detection, calls resolve_duplicate_name()
+        - Uses os.rename() to apply new names
+        - Comprehensive error handling (FileNotFoundError, PermissionError, OSError)
+      RETURNS : True if all handled successfully, False otherwise
+
+--------------------------------------------------------------------------------
+ 6.9  segregation.py — File Organizer
+--------------------------------------------------------------------------------
+
+  FILE     : segregation.py
+  LINES    : 28
+  PURPOSE  : Organizes downloaded files into subfolders by file extension.
+
+  FUNCTION: segregate(directory)
+    PURPOSE : Sort files into extension-based subdirectories.
+    DETAILS :
+      - Lists all files in the given directory
+      - For each file, extracts the extension (e.g., csv, dat, xlsx)
+      - Creates a subfolder named after the extension
+      - Moves the file into the corresponding subfolder
+      - Handles existing directories gracefully (OSError catch)
+    RETURNS : Path to the "csv" subfolder (for downstream validation)
+
+    EXAMPLE:
+      Input directory contents:
+        data.csv, report.dat, summary.xlsx
+
+      After segregation:
+        csv/data.csv
+        dat/report.dat
+        xlsx/summary.xlsx
+
+--------------------------------------------------------------------------------
+ 6.10 NSE_MAIN.py — Legacy Standalone Script
+--------------------------------------------------------------------------------
+
+  FILE     : NSE_MAIN.py
+  LINES    : 217
+  PURPOSE  : Monolithic standalone version of the automation (legacy/reference).
+             Contains all functionality in a single file.
+
+  NOTE: This file is retained for reference. The modular architecture
+        (main.py + individual modules) is the recommended approach.
+
+  KEY DIFFERENCES FROM MODULAR VERSION:
+    - Uses webdriver_manager for ChromeDriver management
+    - Contains built-in email sending (send_email function)
+    - Has file renaming with timestamps
+    - Includes ZIP extraction within the same file
+    - Does file type organization inline
+
+  FUNCTIONS:
+    - send_email(subject, body, attachment_path)
+    - rename_file_with_timestamp(folder, file_name)
+    - unzip_files(folder)
+    - organize_files_by_type(folder)
+    - download_file(link, download_path)
+    - main()
+
+================================================================================
+ 7. CONFIGURATION FILES
+================================================================================
+
+  config.txt
+  ----------
+    PURPOSE : Stores the receiver's email address for notifications.
+    FORMAT  : Single line containing the email address.
+    EXAMPLE : hemanthkanjivaram@gmail.com
+    CREATED : By mail_setup.add_gmail() after OTP verification.
+    DELETED : By mail_setup.remove_gmail() when user resets email.
+
+  schedulers.txt
+  --------------
+    PURPOSE : Persists scheduled job timestamps across app restarts.
+    FORMAT  : One timestamp per line in '%Y-%m-%d %H:%M:%S' format.
+    EXAMPLE :
+      2026-02-11 09:00:00
+      2026-02-12 09:30:00
+    MANAGED : By Scheduling.py (save_schedule / remove_schedule)
+
+  requirements.txt
+  ----------------
+    PURPOSE : Lists Python package dependencies for pip install.
+    CONTENTS:
+      streamlit
+      selenium
+      apscheduler
+      pandas
+      streamlit-option-menu
+
+  nse_report_downloader.log
+  -------------------------
+    PURPOSE : Runtime execution log for debugging and audit trail.
+    FORMAT  : %(asctime)s - %(levelname)s - %(message)s
+    EXAMPLE :
+      2026-02-10 14:30:00,123 - INFO - === STARTING NEW RUN ===
+      2026-02-10 14:30:01,456 - INFO - Initializing browser driver...
+    ATTACHED: To notification emails automatically.
+
+================================================================================
+ 8. APPLICATION WORKFLOW
+================================================================================
+
+  PHASE 1: INITIALIZATION
+  -----------------------
+    1. User runs: streamlit run Streamlit.py
+    2. Streamlit loads the dashboard UI
+    3. Session state initializes (email_setup, otp, email)
+    4. Sidebar navigation renders with 4 pages
+    5. System checks config.txt for existing email setup
+
+  PHASE 2: EMAIL SETUP (First-time only)
+  ---------------------------------------
+    1. User navigates to "Email Setup" page
+    2. Enters their email address
+    3. System validates email format (regex)
+    4. OTP is generated (4-digit random number)
+    5. OTP is sent to the email via Gmail SMTP
+    6. User enters the received OTP
+    7. System verifies OTP match
+    8. Email saved to config.txt
+    9. Dashboard shows "Authenticated" status
+
+  PHASE 3: REPORT DOWNLOAD
+  -------------------------
+    TRIGGER: Manual (button click) or Scheduled (APScheduler)
+
+    1. Chrome WebDriver initialized with anti-bot settings
+    2. Navigate to https://www.nseindia.com/all-reports
+    3. Wait for page to fully load (element presence check)
+    4. Locate report checkboxes in "cr_equity_daily_Current" container
+    5. Select all available reports via JavaScript click
+    6. Click "MultiDwnld" button to trigger ZIP download
+    7. Poll download directory for .zip file (up to 120 seconds)
+    8. Extract ZIP to dated subfolder (e.g., nsefiles/100226/)
+    9. Delete the original ZIP file
+
+  PHASE 4: POST-PROCESSING
+  -------------------------
+    1. Scan extracted folder for duplicate filenames
+    2. Auto-rename duplicates with [1] suffix
+    3. Segregate files by extension into subfolders
+    4. For each CSV file:
+       a. Verify file exists and has .csv extension
+       b. Load into Pandas DataFrame
+       c. Validate column names
+       d. Check data type consistency
+       e. Detect missing values / anomalies
+
+  PHASE 5: NOTIFICATION
+  ----------------------
+    1. Compose MIMEMultipart email message
+    2. Include status (success/failure), download/validation counts
+    3. Attach the execution log file
+    4. Send via Gmail SMTP with TLS encryption
+    5. Log final run status
+
+  PHASE 6: CLEANUP
+  -----------------
+    1. Close Selenium WebDriver
+    2. Log "=== RUN COMPLETE ==="
+    3. If scheduled: update job status, remove from schedulers.txt
+
+================================================================================
+ 9. ERROR HANDLING STRATEGY
+================================================================================
+
+  The application employs a multi-layered error handling approach:
+
+  LEVEL 1 - RETRY WITH BACKOFF
+    Applies to: NSE page navigation, element loading
+    Implementation: retry_operation() in Data_retrieval.py
+    Strategy: 3 retries with random delay (5-7 seconds)
+
+  LEVEL 2 - GRACEFUL DEGRADATION
+    Applies to: Report selection, CSV validation
+    Strategy: Log warning, skip the failed item, continue processing
+
+  LEVEL 3 - FAIL-SAFE NOTIFICATION
+    Applies to: main.py orchestration
+    Strategy: try/except/finally ensures email is ALWAYS sent,
+              even if the main process fails
+
+  LEVEL 4 - RESOURCE CLEANUP
+    Applies to: Selenium WebDriver
+    Strategy: driver.quit() in finally block prevents orphaned browser processes
+
+  SPECIFIC ERROR SCENARIOS:
+
+    | Error                    | Module              | Response                    |
+    |--------------------------|---------------------|-----------------------------|
+    | ChromeDriver not found   | Data_retrieval      | Critical log, raise         |
+    | NSE page timeout         | Data_retrieval      | Retry 3x with backoff       |
+    | No reports on page       | Data_retrieval      | Return False, abort         |
+    | Download timeout (120s)  | Data_retrieval      | Log error, abort            |
+    | ZIP extraction failure   | Data_retrieval      | Log error, return False     |
+    | Duplicate filenames      | duplicates_handler  | Auto-rename with suffix     |
+    | CSV parse error          | csv_validation      | Log, skip file              |
+    | Email send failure       | notification        | Log error, don't crash      |
+    | Config file missing      | notification        | Log error, skip email       |
+    | Scheduler job failure    | Scheduling          | Status set to "Failed"      |
+
+================================================================================
+ 10. DIRECTORY STRUCTURE
+================================================================================
+
+  NSE V2/
+  |
+  |-- Streamlit.py              Main application entry point & UI
+  |-- main.py                   Core workflow orchestrator
+  |-- NSE_MAIN.py               Legacy monolithic script (reference only)
+  |-- Data_retrieval.py         Selenium browser automation logic
+  |-- notification.py           Email notification with log attachment
+  |-- mail_setup.py             Email configuration, OTP verification
+  |-- Scheduling.py             APScheduler job management
+  |-- csv_validation.py         Pandas-based CSV validation engine
+  |-- duplicates_handler.py     Duplicate file detection & resolution
+  |-- segregation.py            File organizer by extension type
+  |
+  |-- config.txt                Stored receiver email address
+  |-- schedulers.txt            Persisted scheduled job timestamps
+  |-- requirements.txt          Python package dependencies
+  |-- nse_report_downloader.log Runtime execution log
+  |
+  |-- nsefiles/                 Downloaded NSE report files
+  |   |-- <DDMMYY>/            Date-stamped extraction folders
+  |       |-- csv/             CSV report files
+  |       |-- dat/             DAT report files
+  |       |-- xlsx/            Excel report files
+  |
+  |-- Reports/                  Archived / processed report outputs
+  |-- __pycache__/              Python bytecode cache
+  |-- .vscode/                  VS Code editor settings
+
+================================================================================
+ 11. DEPENDENCIES
+================================================================================
+
+  PYTHON PACKAGES (via pip):
+
+    Package               Purpose
+    -------               -------
+    streamlit             Web dashboard framework
+    selenium              Browser automation
+    apscheduler           Advanced job scheduling
+    pandas                CSV data processing and validation
+    streamlit-option-menu Enhanced sidebar navigation UI
+
+  SYSTEM REQUIREMENTS:
+
+    - Python 3.10 or higher
+    - Google Chrome browser (latest)
+    - ChromeDriver (auto-managed or manual install)
+    - Windows 10/11, macOS, or Linux
+    - Internet connection (for NSE portal access)
+    - Gmail account with App Password (for notifications)
+
+================================================================================
+ 12. INSTALLATION GUIDE
+================================================================================
+
+  STEP 1: PREREQUISITES
+    - Install Python 3.10+ from https://www.python.org/downloads/
+    - Install Google Chrome from https://www.google.com/chrome/
+    - Ensure pip is available (comes with Python)
+
+  STEP 2: PROJECT SETUP
+    > git clone <repository-url>
+    > cd nse-report-generator
+
+  STEP 3: VIRTUAL ENVIRONMENT (Recommended)
+    > python -m venv venv
+
+    Windows:
+      > .\venv\Scripts\activate
+
+    macOS/Linux:
+      > source venv/bin/activate
+
+  STEP 4: INSTALL DEPENDENCIES
+    > pip install -r requirements.txt
+
+  STEP 5: VERIFY CHROME & CHROMEDRIVER
+    - ChromeDriver version must match your Chrome version
+    - Selenium 4.10+ includes automatic ChromeDriver management
+
+  STEP 6: GMAIL APP PASSWORD
+    - Enable 2-Factor Authentication on your Google Account
+    - Go to: https://myaccount.google.com/apppasswords
+    - Generate an App Password for "Mail"
+    - Use this password in the application's email setup
+
+  STEP 7: LAUNCH
+    > streamlit run Streamlit.py
+    - Dashboard opens at http://localhost:8501
+
+================================================================================
+ 13. USAGE INSTRUCTIONS
+================================================================================
+
+  A. FIRST-TIME SETUP:
+     1. Launch the application
+     2. Go to "Email Setup" tab
+     3. Enter your email address
+     4. Complete OTP verification
+     5. You're ready to download reports
+
+  B. MANUAL DOWNLOAD:
+     1. Go to "NSE Downloader" tab
+     2. Click "START PROCESS"
+     3. Watch progress in "System Logs" tab
+     4. Reports download to C:\NSE\nsefiles\<date>\
+     5. Summary email sent to your configured address
+
+  C. SCHEDULED DOWNLOAD:
+     1. Go to "Schedule" tab
+     2. Select target Date
+     3. Select target Time
+     4. Click "Add to Queue"
+     5. Keep the application running until scheduled time
+     6. Report runs automatically at the specified time
+     7. View status in "System Logs"
+
+  D. VIEWING LOGS:
+     1. Go to "System Logs" tab
+     2. Real-time log output is displayed
+     3. Log file: nse_report_downloader.log
+     4. Logs are also attached to email notifications
+
+================================================================================
+ 14. SECURITY CONSIDERATIONS
+================================================================================
+
+  1. EMAIL CREDENTIALS:
+     - Gmail App Password is hardcoded in notification.py and mail_setup.py
+     - RECOMMENDATION: Move to environment variables or a secrets manager
+     - App Passwords are scoped and revocable from Google Account settings
+
+  2. OTP VERIFICATION:
+     - 4-digit random OTP provides basic verification
+     - OTP is sent via the bot's own email account
+     - Not cryptographically secure; suitable for configuration only
+
+  3. CONFIG FILE:
+     - config.txt stores the receiver email in plain text
+     - No sensitive credentials stored in config.txt
+     - File permissions should be restricted to the application user
+
+  4. SELENIUM BROWSER:
+     - Runs with anti-bot detection disabled
+     - Does not use headless mode by default (visible browser window)
+     - No credentials are entered on the NSE portal (public data only)
+
+  5. NETWORK SECURITY:
+     - Emails sent via TLS encryption (starttls on port 587)
+     - NSE portal accessed via HTTPS
+     - No authentication required for NSE report downloads
+
+================================================================================
+ 15. KNOWN LIMITATIONS
+================================================================================
+
+  1. The application requires Google Chrome to be installed on the host machine.
+
+  2. Download directory is hardcoded to C:\NSE\nsefiles in main.py and
+     C:\NSE\schedulers.txt in Scheduling.py. These paths are Windows-specific.
+
+  3. The scheduler requires the application to be running continuously.
+     Scheduled jobs are lost if the application is restarted (though they
+     are persisted in schedulers.txt and reloaded on next start).
+
+  4. The duplicate handler's resolve_duplicate_name() function uses input()
+     which blocks in non-interactive mode. The fallback auto-naming is used
+     when running via the Streamlit pipeline.
+
+  5. Email credentials (App Password) are hardcoded in the source files.
+
+  6. NSE website structure changes may break the Selenium selectors
+     (element IDs, CSS classes) and require code updates.
+
+  7. Only daily equity reports under "cr_equity_daily_Current" are
+     supported. Other NSE report categories are not currently implemented.
+
+  8. The validation engine only validates CSV files. Other formats (DAT,
+     XLSX) are segregated but not validated.
+
+================================================================================
+ 16. FUTURE ENHANCEMENTS
+================================================================================
+
+  [Planned]
+    - Cloud Deployment: Docker containerization for AWS/Azure deployment
+    - Database Integration: PostgreSQL/MySQL for historical data storage
+    - Data Visualization: Dashboard charts for market trend analysis
+    - API Support: REST API for external trigger integration
+    - Multi-Exchange Support: BSE and MCX market compatibility
+    - Headless Mode Toggle: User-controlled browser visibility setting
+
+  [Recommended]
+    - Environment variable support for email credentials
+    - Cross-platform path handling for Linux/macOS compatibility
+    - DAT and XLSX file validation support
+    - Download directory configuration via the dashboard
+    - Historical run tracking with success/failure statistics
+    - Report comparison (diff between consecutive days)
+    - Webhook notifications (Slack, Teams, Discord)
+
+================================================================================
+ 17. CONCLUSION
+================================================================================
+
+The Automated Daily NSE Report Generator (NSE Bot V2) provides a complete,
+production-grade solution for automating the retrieval, validation, and
+distribution of NSE financial reports. With its modular Python architecture,
+Streamlit-powered dashboard, Selenium automation engine, and built-in
+scheduling and notification capabilities, it eliminates manual data
+retrieval processes and ensures stakeholders receive timely, validated
+market data every trading day.
+
+The application is designed for extensibility, with clean module boundaries
+that allow for easy feature additions such as multi-exchange support,
+database integration, and cloud deployment.
+
+================================================================================
+                         END OF DOCUMENTATION
+================================================================================
